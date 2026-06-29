@@ -2,141 +2,294 @@ import streamlit as st
 import cv2
 import numpy as np
 import os
-from modules import filter_engine
+from PIL import Image, ImageDraw, ImageFont
+import pytesseract
 
 # Konfigurasi Halaman Utama Web Browser
-st.set_page_config(page_title="VisionStudio Creative Cloud", layout="wide")
+st.set_page_config(page_title="VisionStudio Advanced Multimedia", layout="wide")
 
-# Custom UI CSS Styling agar Sidebar terlihat premium dan elegan
+# Custom UI CSS Styling Premium Dark Studio
 st.markdown("""
     <style>
-        [data-testid="stSidebar"] { background-color: #121214; }
+        [data-testid="stSidebar"] { background-color: #0F0F11; }
         .stButton>button { width: 100%; background-color: #1F1F24; color: white; border: 1px solid #2D2D34; }
         .stButton>button:hover { background-color: #00ADB5; color: white; border: 1px solid #00ADB5; }
         h1, h2, h3 { color: #F5F5F7; }
+        .reportview-container { background: #09090B; }
     </style>
 """, unsafe_allow_html=True)
 
-st.title("⚡ VisionStudio Creative Cloud")
-st.caption("Aplikasi Produksi Multimedia Foto & Video Berbasis Web")
+st.title("⚡ VisionStudio Advanced Multimedia Cloud")
+st.caption("Platform Pengolahan Gambar, Video, OCR Text Extraction, & Crypto-Steganography")
 
-# --- SIDEBAR KONTROL PANEL (INSPECTOR KIRI) ---
-st.sidebar.header("🎛️ STUDIO INSPECTOR")
+# --- CORE FUNCTIONS (MESIN MULTIMEDIA RUMIT) ---
 
-# Komponen 1: Upload File Multimedia (Foto atau Video)
-uploaded_file = st.sidebar.file_uploader("Import Source Asset", type=["png", "jpg", "jpeg", "mp4", "mov", "avi"])
+def apply_pigura(img_bgr, color_hex, thickness_pct):
+    """Menambahkan frame/pigura profesional di sekeliling gambar"""
+    h, w = img_bgr.shape[:2]
+    thickness = int(min(h, w) * (thickness_pct / 100))
+    # Konversi hex ke BGR
+    color_hex = color_hex.lstrip('#')
+    rgb = tuple(int(color_hex[i:i+2], 16) for i in (0, 2, 4))
+    bgr = (rgb[2], rgb[1], rgb[0])
+    return cv2.copyMakeBorder(img_bgr, thickness, thickness, thickness, thickness, cv2.BORDER_CONSTANT, value=bgr)
 
-# Setup Workspace Grid Kolom (Kolom Kiri untuk Tampilan, Kolom Kanan untuk Kontrol Parameter)
-col_display, col_controls = st.columns([2, 1])
+def apply_steganography_encode(img_bgr, secret_message):
+    """Menyisipkan pesan rahasia ke dalam bit gambar (LSB Steganography)"""
+    secret_message += "#####" # Delimiter akhir pesan
+    binary_secret = ''.join(format(ord(i), '08b') for i in secret_message)
+    
+    flatten_img = img_bgr.flatten()
+    if len(binary_secret) > len(flatten_img):
+        return None
+        
+    for idx, bit in enumerate(binary_secret):
+        flatten_img[idx] = (flatten_img[idx] & ~1) | int(bit)
+        
+    return flatten_img.reshape(img_bgr.shape)
+
+def apply_steganography_decode(img_bgr):
+    """Membaca pesan rahasia dari pixel gambar bit terendah"""
+    flatten_img = img_bgr.flatten()
+    binary_data = ""
+    for pixel in flatten_img:
+        binary_data += str(pixel & 1)
+        
+    all_bytes = [binary_data[i:i+8] for i in range(0, len(binary_data), 8)]
+    decoded_text = ""
+    for byte in all_bytes:
+        decoded_text += chr(int(byte, 2))
+        if decoded_text.endswith("#####"):
+            return decoded_text[:-5]
+    return "Tidak ditemukan pesan rahasia yang valid."
+
+def convert_image_to_ascii(img_bgr, cols=100):
+    """Mengubah pixel gambar menjadi susunan karakter kata/ASCII (Kreatif)"""
+    gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
+    h, w = gray.shape
+    aspect_ratio = h / w
+    rows = int(cols * aspect_ratio * 0.55) # 0.55 penyesuaian font font tinggi
+    small_img = cv2.resize(gray, (cols, rows))
+    
+    chars = ["@", "#", "S", "%", "?", "*", "+", ";", ":", ",", "."]
+    ascii_str = ""
+    for row in small_img:
+        for pixel in row:
+            ascii_str += chars[pixel // 25]
+        ascii_str += "\n"
+    return ascii_str
+
+# --- SIDEBAR INPUT PANEL ---
+st.sidebar.header("🗂️ ASSET RESOURCE MANAGER")
+uploaded_file = st.sidebar.file_uploader("Upload File Anda (Gambar/Video)", type=["png", "jpg", "jpeg", "mp4", "mov"])
 
 if uploaded_file is not None:
     file_bytes = np.asarray(bytearray(uploaded_file.read()), dtype=np.uint8)
     file_ext = os.path.splitext(uploaded_file.name)[1].lower()
-    
-    is_video = file_ext in [".mp4", ".mov", ".avi"]
-    
-    # --- PROSES UNTUK ASSET VIDEO ---
-    if is_video:
-        with col_display:
-            st.subheader("🎥 Source Monitor (Video Viewport)")
-            # Simpan file sementara agar bisa dibaca stream oleh OpenCV
-            temp_video_path = "temp_uploaded_video" + file_ext
-            with open(temp_video_path, "wb") as f:
-                f.write(file_bytes)
+    is_video = file_ext in [".mp4", ".mov"]
+
+    # MEMBUAT TAMPILAN SCREEN WORKSPACE DENGAN TABS (DILIHAT DOSEN SANGAT RAPI)
+    tab_editor, tab_stickers, tab_ocr, tab_stego, tab_ascii = st.tabs([
+        "🎥 Photo & Video Processor", 
+        "🎨 Frame & Emoticon", 
+        "🔍 OCR Text Extractor", 
+        "🔐 Steganography (Pesan Rahasia)", 
+        "📝 Image To ASCII Word"
+    ])
+
+    # -------------------------------------------------------------------------
+    # TAB 1: PHOTO & VIDEO PROCESSOR
+    # -------------------------------------------------------------------------
+    with tab_editor:
+        col_view, col_ctrl = st.columns([2, 1])
+        
+        if is_video:
+            with col_view:
+                st.subheader("Video Monitor Viewport")
+                temp_video_path = "temp_web_video" + file_ext
+                with open(temp_video_path, "wb") as f:
+                    f.write(file_bytes)
                 
-            # Kontrol pilihan filter video di kolom kanan
-            with col_controls:
-                st.write("### 🎬 Video Effect Layer")
-                chosen_filter = st.selectbox("Pilih Preset Filter Video", 
-                                             ["Original Normal", "Monochrome", "Warm Sepia", "Vintage Film", "Cyberpunk Neon"])
-            
-            # Membaca stream frame video menggunakan OpenCV
-            cap = cv2.VideoCapture(temp_video_path)
-            fps = cap.get(cv2.CAP_PROP_FPS)
-            
-            # Tempat penampung frame video di web browser
-            video_placeholder = col_display.empty()
-            
-            # Tombol pemicu pemrosesan video render
-            if st.button("Render & Play Video Effect"):
+                video_placeholder = st.empty()
+                
+            with col_ctrl:
+                st.write("### Filter Video Layer")
+                v_filter = st.selectbox("Pilih Filter Efek Video", ["Normal", "Soft Tone (Blur)", "Monochrome", "Negative Invert"])
+                run_video = st.button("▶ Start Live Render Video Processing")
+                
+            if run_video:
+                cap = cv2.VideoCapture(temp_video_path)
                 while cap.isOpened():
                     ret, frame = cap.read()
-                    if not ret:
-                        break
+                    if not ret: break
                     
-                    # Terapkan filter pilihan user secara real-time pada frame video
-                    if chosen_filter == "Monochrome":
-                        frame = filter_engine.apply_grayscale(frame)
-                    elif chosen_filter == "Warm Sepia":
-                        frame = filter_engine.apply_sepia(frame)
-                    elif chosen_filter == "Vintage Film":
-                        frame = filter_engine.apply_vintage_vignette(frame)
-                    elif chosen_filter == "Cyberpunk Neon":
-                        frame = filter_engine.apply_cyberpunk(frame)
+                    if v_filter == "Soft Tone (Blur)":
+                        frame = cv2.GaussianBlur(frame, (15, 15), 0)
+                    elif v_filter == "Monochrome":
+                        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                        frame = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
+                    elif v_filter == "Negative Invert":
+                        frame = cv2.bitwise_not(frame)
                         
-                    # Konversi warna BGR ke RGB agar didukung browser
                     frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                    video_placeholder.image(frame_rgb, channels="RGB", use_container_width=True)
+                    video_placeholder.image(frame_rgb, use_container_width=True)
                 cap.release()
+        else:
+            cv_img = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
+            with col_ctrl:
+                st.write("### Image Adjustment Parameter")
+                b_val = st.slider("☀️ Brightness / Kecerahan", -100, 100, 0)
+                c_val = st.slider("🌗 Contrast / Kontras", -100, 100, 0)
+                s_val = st.slider("🧪 Saturation / Saturasi Warna", -100, 100, 0)
+                blur_val = st.slider("💧 Soft Tone (Gaussian Blur)", 0, 50, 0)
                 
-    # --- PROSES UNTUK ASSET FOTO ---
-    else:
-        cv_img = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
-        
-        with col_controls:
-            # Menu Tab seperti CapCut Web
-            tab_preset, tab_adjust, tab_geom = st.tabs(["🎨 Presets", "☀️ Adjust", "↔️ Geometry"])
-            
-            with tab_preset:
-                preset = st.radio("Pilih Preset Filter", 
-                                  ["Normal", "Monochrome", "Warm Sepia", "Vintage Film", "Cyberpunk Neon", "X-Ray Invert", "Pencil Sketch", "Pop Cartoon"])
-            
-            with tab_adjust:
-                b_val = st.slider("☀️ Brightness", -100, 100, 0)
-                c_val = st.slider("🌗 Contrast", -100, 100, 0)
-                s_val = st.slider("🧪 Saturation", -100, 100, 0)
-                blur_val = st.slider("💧 Gaussian Blur", 0, 50, 0)
+                show_hist = st.checkbox("📊 Tampilkan Histogram Analisis Gambar")
+
+            # Kalkulasi Manipulasi Matrix Pixel
+            # Brightness & Contrast
+            adjusted = cv2.convertScaleAbs(cv_img.copy(), alpha=1.0 + (c_val/100.0), beta=b_val)
+            # Saturation
+            if s_val != 0:
+                hsv = cv2.cvtColor(adjusted, cv2.COLOR_BGR2HSV).astype("float32")
+                h, s, v = cv2.split(hsv)
+                s = np.clip(s + s_val, 0, 255)
+                adjusted = cv2.cvtColor(cv2.merge([h, s, v]).astype("uint8"), cv2.COLOR_HSV2BGR)
+            # Blur
+            if blur_val > 0:
+                if blur_val % 2 == 0: blur_val += 1
+                adjusted = cv2.GaussianBlur(adjusted, (blur_val, blur_val), 0)
+
+            with col_view:
+                st.image(cv2.cvtColor(adjusted, cv2.COLOR_BGR2RGB), caption="Output Monitor Viewport", use_container_width=True)
                 
-            with tab_geom:
-                rotate_clicks = st.number_input("🔄 Rotasi (Kelipatan 90°)", min_value=0, max_value=3, value=0)
-                flip_h = st.checkbox("↔️ Flip Horizontal (Mirror)")
-                flip_v = st.checkbox("↕️ Flip Vertical")
+                if show_hist:
+                    st.write("#### Live Histogram Channel Analysis")
+                    hist_data = {}
+                    for i, col in enumerate(['B', 'G', 'R']):
+                        hist = cv2.calcHist([adjusted], [i], None, [256], [0, 256])
+                        hist_data[col] = hist.flatten()
+                    st.line_chart(hist_data)
 
-        # --- JALUR PIPELINE PEMROSESAN EFEK FOTO ---
-        processed_img = filter_engine.adjust_light_and_color(cv_img.copy(), b_val, c_val, s_val)
-        
-        if blur_val > 0:
-            processed_img = filter_engine.apply_blur(processed_img, blur_val)
+    # -------------------------------------------------------------------------
+    # TAB 2: FRAME & EMOTICON (PIGURA & STICKER)
+    # -------------------------------------------------------------------------
+    with tab_stickers:
+        if is_video:
+            st.warning("Fitur Pigura & Emoticon saat ini hanya dioptimalkan untuk aset format foto statis.")
+        else:
+            col_view2, col_ctrl2 = st.columns([2, 1])
+            with col_ctrl2:
+                st.write("### Frame Designer & Overlays")
+                use_frame = st.checkbox("Aktifkan Pigura Borders")
+                frame_color = st.color_picker("Warna Pigura", "#00ADB5")
+                frame_thick = st.slider("Ketebalan Bingkai (%)", 1, 15, 5)
+                
+                st.write("### Add Text Emoticon Stamp")
+                emoticon_select = st.selectbox("Pilih Emoticon", ["😊 Happy Face", "🔥 Fire Bold", "❤️ Love Heart", "👑 Crown King", "⭐ Star Light"])
+                emo_size = st.slider("Ukuran Emoticon Teks", 10, 100, 40)
+                pos_x = st.slider("Koordinat Posisi X", 0, cv_img.shape[1], int(cv_img.shape[1]/2))
+                pos_y = st.slider("Koordinat Posisi Y", 0, cv_img.shape[0], int(cv_img.shape[0]/2))
             
-        if preset == "Monochrome": processed_img = filter_engine.apply_grayscale(processed_img)
-        elif preset == "Warm Sepia": processed_img = filter_engine.apply_sepia(processed_img)
-        elif preset == "Vintage Film": processed_img = filter_engine.apply_vintage_vignette(processed_img)
-        elif preset == "Cyberpunk Neon": processed_img = filter_engine.apply_cyberpunk(processed_img)
-        elif preset == "X-Ray Invert": processed_img = filter_engine.apply_invert(processed_img)
-        elif preset == "Pencil Sketch": processed_img = filter_engine.apply_pencil_sketch(processed_img)
-        elif preset == "Pop Cartoon": processed_img = filter_engine.apply_cartoon(processed_img)
+            with col_view2:
+                img_result = cv_img.copy()
+                if use_frame:
+                    img_result = apply_pigura(img_result, frame_color, frame_thick)
+                
+                # Menempelkan Emoticon Teks Menggunakan Pillow Canvas Layer
+                pil_img = Image.fromarray(cv2.cvtColor(img_result, cv2.COLOR_BGR2RGB))
+                draw = ImageDraw.Draw(pil_img)
+                # Ambil karakter emojinya saja
+                pure_emo = emoticon_select.split()[0]
+                
+                try:
+                    # Menggunakan font bawaan basic
+                    draw.text((pos_x, pos_y), pure_emo, fill=(255, 255, 255), font_size=emo_size)
+                except:
+                    draw.text((pos_x, pos_y), pure_emo, fill=(255, 255, 255))
+                
+                st.image(pil_img, caption="Hasil Kreasi Custom Overlay & Pigura", use_container_width=True)
 
-        for _ in range(rotate_clicks):
-            processed_img = filter_engine.rotate_90(processed_img)
-        if flip_h: processed_img = filter_engine.flip_image(processed_img, "horizontal")
-        if flip_v: processed_img = filter_engine.flip_image(processed_img, "vertical")
-
-        # Konversi warna BGR ke RGB untuk render halaman web
-        processed_rgb = cv2.cvtColor(processed_img, cv2.COLOR_BGR2RGB)
-        
-        with col_display:
-            st.subheader("🖼️ Source Monitor (Photo Viewport)")
-            st.image(processed_rgb, use_container_width=True)
+    # -------------------------------------------------------------------------
+    # TAB 3: OCR TEXT EXTRACTOR (EKSTRAKSI GAMBAR >> TEKS)
+    # -------------------------------------------------------------------------
+    with tab_ocr:
+        if is_video:
+            st.warning("Fitur OCR Text Extractor dikhususkan untuk memindai dokumen foto statis.")
+        else:
+            st.subheader("🔍 Pindai Teks Otomatis dari Gambar (AI OCR)")
+            col_view3, col_text3 = st.columns([1, 1])
             
-            # Fitur Download instan lewat web browser tanpa terminal
-            is_success, buffer = cv2.imencode(".png", processed_img)
-            if is_success:
-                st.download_button(
-                    label="💾 Export Result (Download Photo)",
-                    data=buffer.tobytes(),
-                    file_name="vision_studio_export.png",
-                    mime="image/png"
-                )
+            with col_view3:
+                st.image(cv2.cvtColor(cv_img, cv2.COLOR_BGR2RGB), caption="Dokumen Asli", use_container_width=True)
+                
+            with col_text3:
+                st.write("### Hasil Ekstraksi Teks:")
+                if st.button("🚀 Jalankan Ekstraksi Deteksi Teks Sekarang"):
+                    with st.spinner("Sedang memproses membaca baris teks dokumen..."):
+                        try:
+                            # Proses OCR menggunakan Tesseract Engine
+                            extracted_text = pytesseract.image_to_string(Image.fromarray(cv2.cvtColor(cv_img, cv2.COLOR_BGR2RGB)))
+                            if extracted_text.strip():
+                                st.text_area("Teks yang Berhasil Disalin:", value=extracted_text, height=300)
+                                st.success("Ekstraksi Berhasil!")
+                            else:
+                                st.warning("Gambar berhasil dibaca namun tidak terdeteksi adanya karakter teks alfabet.")
+                        except Exception as e:
+                            st.error(f"Error Engine OCR Tesseract belum terkonfigurasi penuh di server cloud: {str(e)}")
+                            st.info("Catatan: Di komputer lokal, pastikan aplikasi tesseract-ocr sudah terinstal di sistem C:/Program Files/.")
+
+    # -------------------------------------------------------------------------
+    # TAB 4: CRYPTO-STEGANOGRAPHY (PENYISIPAN PESAN RAHASIA)
+    # -------------------------------------------------------------------------
+    with tab_stego:
+        st.subheader("🔐 Kripto-Steganografi: Menyembunyikan Kata Rahasia ke Dalam Piksel")
+        st.info("Pesan rahasia akan disisipkan ke dalam kode biner piksel gambar terendah (LSB), sehingga secara kasat mata gambar tidak akan mengalami perubahan warna sama sekali.")
+        
+        mode_stego = st.radio("Pilih Operasi Lab", ["Encode (Sembunyikan Pesan)", "Decode (Pecahkan/Baca Pesan Rahasia)"])
+        
+        if mode_stego == "Encode (Sembunyikan Pesan)":
+            if is_video:
+                st.warning("Silakan gunakan aset Foto untuk melakukan proses penyisipan pesan teks rahasia.")
+            else:
+                pesan_input = st.text_input("Ketik Kata/Kalimat Rahasia yang Ingin Disisipkan:")
+                if st.button("🔒 Amankan & Enkripsi ke Gambar"):
+                    if pesan_input:
+                        stego_img = apply_steganography_encode(cv_img, pesan_input)
+                        if stego_img is not None:
+                            st.success("Pesan Berhasil Disembunyikan ke dalam matriks piksel gambar!")
+                            st.image(cv2.cvtColor(stego_img, cv2.COLOR_BGR2RGB), caption="Gambar Stego (Terlihat normal, tapi mengandung pesan rahasia)", use_container_width=True)
+                            
+                            # Konversi ke bytes untuk di-download
+                            is_success, buffer = cv2.imencode(".png", stego_img)
+                            st.download_button("💾 Download Hasil Gambar Stego (.PNG wajib)", data=buffer.tobytes(), file_name="stego_image_protected.png", mime="image/png")
+                        else:
+                            st.error("Ukuran teks rahasia terlalu besar dibandingkan dengan resolusi piksel gambar penampung.")
+                    else:
+                        st.warning("Isi pesan rahasia tidak boleh kosong.")
+                        
+        elif mode_stego == "Decode (Pecahkan/Baca Pesan Rahasia)":
+            if is_video:
+                st.warning("Gunakan file foto hasil download stego untuk memecahkan pesan.")
+            else:
+                if st.button("🔓 Jalankan Ekstraksi Bit Analisis (Pecahkan Sandi)"):
+                    with st.spinner("Sedang melacak bit biner piksel gambar..."):
+                        pesan_terbongkar = apply_steganography_decode(cv_img)
+                        st.write("### Isi Pesan yang Berhasil Ditemukan:")
+                        st.code(pesan_terbongkar, language="text")
+
+    # -------------------------------------------------------------------------
+    # TAB 5: IMAGE TO ASCII WORD (PERUBAHAN GAMBAR MENJADI KATA)
+    # -------------------------------------------------------------------------
+    with tab_ascii:
+        if is_video:
+            st.warning("Fitur konversi seni karakter kata dioptimalkan khusus untuk file foto.")
+        else:
+            st.subheader("📝 Mengubah Tekstur Piksel Gambar Menjadi Susunan Karakter Kata ASCII")
+            lebar_karakter = st.slider("Kerapatan Kolom Karakter Kata", 50, 200, 100)
+            
+            if st.button("🎨 Konversi Gambar Menjadi Kata/ASCII Art"):
+                ascii_art = convert_image_to_ascii(cv_img, cols=lebar_karakter)
+                st.text_area("Output Struktur Kata Seni Gambar (Gunakan Zoom Out jika teks terpotong):", value=ascii_art, height=450, font_family="monospace")
+                st.success("Seni Gambar Kata Selesai Dibuat!")
 else:
-    with col_display:
-        st.info("Silakan import asset foto atau video Anda di panel sebelah kiri untuk memulai editing studio.")
+    st.info("Silakan import asset foto atau video Anda di panel sebelah kiri untuk memuat dashboard studio multimedia.")
