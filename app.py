@@ -35,18 +35,21 @@ def apply_pigura(img_bgr, color_hex, thickness_pct):
     return cv2.copyMakeBorder(img_bgr, thickness, thickness, thickness, thickness, cv2.BORDER_CONSTANT, value=bgr)
 
 def apply_steganography_encode(img_bgr, secret_message):
-    """Menyisipkan pesan rahasia ke dalam bit gambar (LSB Steganography)"""
+    """Menyisipkan pesan rahasia ke dalam bit gambar (LSB Steganography) - Anti Overflow"""
     secret_message += "#####" # Delimiter akhir pesan
     binary_secret = ''.join(format(ord(i), '08b') for i in secret_message)
     
-    flatten_img = img_bgr.flatten()
+    # Konversi sementara ke int32 agar operasi matematika bitwise tidak overflow
+    flatten_img = img_bgr.flatten().astype(np.int32)
+    
     if len(binary_secret) > len(flatten_img):
         return None
         
     for idx, bit in enumerate(binary_secret):
         flatten_img[idx] = (flatten_img[idx] & ~1) | int(bit)
         
-    return flatten_img.reshape(img_bgr.shape)
+    # Kembalikan lagi ke tipe data uint8 asli gambar setelah selesai
+    return flatten_img.clip(0, 255).astype(np.uint8).reshape(img_bgr.shape)
 
 def apply_steganography_decode(img_bgr):
     """Membaca pesan rahasia dari pixel gambar bit terendah"""
@@ -171,7 +174,7 @@ if uploaded_file is not None:
                     st.line_chart(hist_data)
 
     # -------------------------------------------------------------------------
-    # TAB 2: FRAME & EMOTICON (PIGURA & STICKER)
+    # TAB 2: FRAME & EMOTICON (PIGURA & STICKER) - FIXED FOR EMOJI PNG
     # -------------------------------------------------------------------------
     with tab_stickers:
         if is_video:
@@ -185,8 +188,23 @@ if uploaded_file is not None:
                 frame_thick = st.slider("Ketebalan Bingkai (%)", 1, 15, 5)
                 
                 st.write("### Add Text Emoticon Stamp")
-                emoticon_select = st.selectbox("Pilih Emoticon", ["😊 Happy Face", "🔥 Fire Bold", "❤️ Love Heart", "👑 Crown King", "⭐ Star Light"])
-                emo_size = st.slider("Ukuran Emoticon Teks", 10, 100, 40)
+                # Menggunakan ID Kode Hex Emoji resmi Twemoji
+                emoticon_select = st.selectbox(
+                    "Pilih Emoticon", 
+                    ["😊 Happy Face", "🔥 Fire Bold", "❤️ Love Heart", "👑 Crown King", "⭐ Star Light"]
+                )
+                
+                # Mapping pilihan ke kode unicode hex resmi untuk diunduh otomatis
+                emoji_mapping = {
+                    "😊 Happy Face": "1f60a",
+                    "🔥 Fire Bold": "1f525",
+                    "❤️ Love Heart": "2764",
+                    "👑 Crown King": "1f451",
+                    "⭐ Star Light": "2b50"
+                }
+                
+                selected_hex = emoji_mapping[emoticon_select]
+                emo_size = st.slider("Ukuran Emoticon Teks", 20, 200, 80)
                 pos_x = st.slider("Koordinat Posisi X", 0, cv_img.shape[1], int(cv_img.shape[1]/2))
                 pos_y = st.slider("Koordinat Posisi Y", 0, cv_img.shape[0], int(cv_img.shape[0]/2))
             
@@ -195,19 +213,43 @@ if uploaded_file is not None:
                 if use_frame:
                     img_result = apply_pigura(img_result, frame_color, frame_thick)
                 
-                # Menempelkan Emoticon Teks Menggunakan Pillow Canvas Layer
+                # Konversi hasil OpenCV ke PIL Image
                 pil_img = Image.fromarray(cv2.cvtColor(img_result, cv2.COLOR_BGR2RGB))
-                draw = ImageDraw.Draw(pil_img)
-                # Ambil karakter emojinya saja
-                pure_emo = emoticon_select.split()[0]
+                
+                # Mengunduh aset gambar PNG emoji secara real-time dari repository resmi Twemoji
+                emoji_url = f"https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/72x72/{selected_hex}.png"
                 
                 try:
-                    # Menggunakan font bawaan basic
-                    draw.text((pos_x, pos_y), pure_emo, fill=(255, 255, 255), font_size=emo_size)
-                except:
-                    draw.text((pos_x, pos_y), pure_emo, fill=(255, 255, 255))
+                    import urllib.request
+                    # Simpan emoji sementara
+                    emoji_path = f"temp_{selected_hex}.png"
+                    if not os.path.exists(emoji_path):
+                        urllib.request.urlretrieve(emoji_url, emoji_path)
+                    
+                    # Buka gambar emoji dan ubah ukurannya sesuai slider
+                    emoji_img = Image.open(emoji_path).convert("RGBA")
+                    emoji_img = emoji_img.resize((emo_size, emo_size), Image.Resampling.LANCZOS)
+                    
+                    # Tempelkan gambar emoji di atas foto utama (mendukung transparansi)
+                    pil_img.paste(emoji_img, (pos_x, pos_y), emoji_img)
+                except Exception as e:
+                    # Fallback jika koneksi server gagal, tampilkan teks penanda biasa
+                    draw = ImageDraw.Draw(pil_img)
+                    draw.text((pos_x, pos_y), "[Sticker]", fill=(255, 255, 255))
                 
                 st.image(pil_img, caption="Hasil Kreasi Custom Overlay & Pigura", use_container_width=True)
+                
+                # Sediakan tombol download hasil modifikasi
+                buffered = np.array(pil_img)
+                final_bgr = cv2.cvtColor(buffered, cv2.COLOR_RGB2BGR)
+                is_success, buffer = cv2.imencode(".png", final_bgr)
+                if is_success:
+                    st.download_button(
+                        label="💾 Download Hasil Modifikasi Stiker",
+                        data=buffer.tobytes(),
+                        file_name="vision_studio_sticker.png",
+                        mime="image/png"
+                    )
 
     # -------------------------------------------------------------------------
     # TAB 3: OCR TEXT EXTRACTOR (EKSTRAKSI GAMBAR >> TEKS)
