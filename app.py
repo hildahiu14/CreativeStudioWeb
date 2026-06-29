@@ -185,12 +185,13 @@ if uploaded_file is not None:
                     st.line_chart(hist_data)
 
     # -------------------------------------------------------------------------
-    # TAB 2: FRAME & EMOTICON (PIGURA & STICKER) - FIXED FOR EMOJI PNG
+    # TAB 2: FRAME & EMOTICON (PIGURA & STICKER)
     # -------------------------------------------------------------------------
     with tab_stickers:
         if is_video:
             st.warning("Fitur Pigura & Emoticon saat ini hanya dioptimalkan untuk aset format foto statis.")
         else:
+            cv_img = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
             col_view2, col_ctrl2 = st.columns([2, 1])
             with col_ctrl2:
                 st.write("### Frame Designer & Overlays")
@@ -199,13 +200,12 @@ if uploaded_file is not None:
                 frame_thick = st.slider("Ketebalan Bingkai (%)", 1, 15, 5)
                 
                 st.write("### Add Text Emoticon Stamp")
-                # Menggunakan ID Kode Hex Emoji resmi Twemoji
+                # PERUBAHAN: Menambahkan opsi default "-- Pilih Emoticon --" di awal list
                 emoticon_select = st.selectbox(
                     "Pilih Emoticon", 
-                    ["😊 Happy Face", "🔥 Fire Bold", "❤️ Love Heart", "👑 Crown King", "⭐ Star Light"]
+                    ["-- Pilih Emoticon --", "😊 Happy Face", "🔥 Fire Bold", "❤️ Love Heart", "👑 Crown King", "⭐ Star Light"]
                 )
                 
-                # Mapping pilihan ke kode unicode hex resmi untuk diunduh otomatis
                 emoji_mapping = {
                     "😊 Happy Face": "1f60a",
                     "🔥 Fire Bold": "1f525",
@@ -214,7 +214,7 @@ if uploaded_file is not None:
                     "⭐ Star Light": "2b50"
                 }
                 
-                selected_hex = emoji_mapping[emoticon_select]
+                # Slider posisi dan ukuran hanya masuk akal jika emoticon dipilih
                 emo_size = st.slider("Ukuran Emoticon Teks", 20, 200, 80)
                 pos_x = st.slider("Koordinat Posisi X", 0, cv_img.shape[1], int(cv_img.shape[1]/2))
                 pos_y = st.slider("Koordinat Posisi Y", 0, cv_img.shape[0], int(cv_img.shape[0]/2))
@@ -224,42 +224,29 @@ if uploaded_file is not None:
                 if use_frame:
                     img_result = apply_pigura(img_result, frame_color, frame_thick)
                 
-                # Konversi hasil OpenCV ke PIL Image
                 pil_img = Image.fromarray(cv2.cvtColor(img_result, cv2.COLOR_BGR2RGB))
                 
-                # Mengunduh aset gambar PNG emoji secara real-time dari repository resmi Twemoji
-                emoji_url = f"https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/72x72/{selected_hex}.png"
-                
-                try:
-                    import urllib.request
-                    # Simpan emoji sementara
-                    emoji_path = f"temp_{selected_hex}.png"
-                    if not os.path.exists(emoji_path):
-                        urllib.request.urlretrieve(emoji_url, emoji_path)
-                    
-                    # Buka gambar emoji dan ubah ukurannya sesuai slider
-                    emoji_img = Image.open(emoji_path).convert("RGBA")
-                    emoji_img = emoji_img.resize((emo_size, emo_size), Image.Resampling.LANCZOS)
-                    
-                    # Tempelkan gambar emoji di atas foto utama (mendukung transparansi)
-                    pil_img.paste(emoji_img, (pos_x, pos_y), emoji_img)
-                except Exception as e:
-                    # IMPLEMENTASI IMAGEFONT: Fallback jika koneksi internet offline
-                    draw = ImageDraw.Draw(pil_img)
+                # PERUBAHAN: Jalankan proses penempelan hanya jika opsi yang dipilih BUKAN opsi default
+                if emoticon_select != "-- Pilih Emoticon --":
+                    selected_hex = emoji_mapping[emoticon_select]
+                    emoji_url = f"https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/72x72/{selected_hex}.png"
                     
                     try:
-                        # Mencoba memuat font bawaan sistem Windows (Arial) dengan ukuran dinamis sesuai slider
-                        custom_font = ImageFont.truetype("arial.ttf", size=emo_size)
-                    except IOError:
-                        # Jika di cloud Linux atau font arial tidak ketemu, gunakan font default PIL
-                        custom_font = ImageFont.load_default()
+                        import urllib.request
+                        emoji_path = f"temp_{selected_hex}.png"
+                        if not os.path.exists(emoji_path):
+                            urllib.request.urlretrieve(emoji_url, emoji_path)
                         
-                    # Gambar teks cap penanda menggunakan font yang telah dikonfigurasi
-                    draw.text((pos_x, pos_y), f"[{emoticon_select.split()[0]}]", fill=(255, 255, 255), font=custom_font)
+                        emoji_img = Image.open(emoji_path).convert("RGBA")
+                        emoji_img = emoji_img.resize((emo_size, emo_size), Image.Resampling.LANCZOS)
+                        
+                        pil_img.paste(emoji_img, (pos_x, pos_y), emoji_img)
+                    except Exception as e:
+                        draw = ImageDraw.Draw(pil_img)
+                        draw.text((pos_x, pos_y), "[Sticker]", fill=(255, 255, 255))
                 
                 st.image(pil_img, caption="Hasil Kreasi Custom Overlay & Pigura", use_container_width=True)
                 
-                # Sediakan tombol download hasil modifikasi
                 buffered = np.array(pil_img)
                 final_bgr = cv2.cvtColor(buffered, cv2.COLOR_RGB2BGR)
                 is_success, buffer = cv2.imencode(".png", final_bgr)
@@ -298,6 +285,7 @@ if uploaded_file is not None:
                         st.error(f"Gagal mengeksekusi OCR. Periksa kembali instalasi Tesseract di laptopmu. Error: {e}")
             else:
                 st.error("Silakan unggah file gambar terlebih dahulu di sidebar kiri!")
+                
     # -------------------------------------------------------------------------
     # TAB 4: CRYPTO-STEGANOGRAPHY (PENYISIPAN PESAN RAHASIA)
     # -------------------------------------------------------------------------
