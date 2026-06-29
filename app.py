@@ -289,7 +289,8 @@ if uploaded_file is not None:
             
             if st.button("🎨 Konversi Gambar Menjadi Kata/ASCII Art"):
                 ascii_art = convert_image_to_ascii(cv_img, cols=lebar_karakter)
-                st.text_area("Output Struktur Kata Seni Gambar (Gunakan Zoom Out jika teks terpotong):", value=ascii_art, height=450, font_family="monospace")
+                # KODE YANG SUDAH DIPERBAIKI TOTAL (TANPA PARAMETER TYPO):
+                st.text_area("Output Struktur Kata Seni Gambar (Gunakan Zoom Out jika teks terpotong):", value=ascii_art, height=450)
                 st.success("Seni Gambar Kata Selesai Dibuat!")
 else:
     st.info("Silakan import asset foto atau video Anda di panel sebelah kiri untuk memuat dashboard studio multimedia.")
