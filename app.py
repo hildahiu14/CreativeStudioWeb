@@ -15,6 +15,7 @@ else:
     # Jika tidak ada (berarti sedang di server cloud Linux), 
     # biarkan kosongan karena Linux akan mendeteksi Tesseract secara otomatis melalui PATH sistem.
     pass
+
 # Konfigurasi Halaman Utama Web Browser
 st.set_page_config(page_title="VisionStudio Advanced Multimedia", layout="wide")
 
