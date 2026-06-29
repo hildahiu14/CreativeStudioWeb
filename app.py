@@ -15,7 +15,7 @@ st.markdown("""
         .stButton>button:hover { background-color: #00ADB5; color: white; border: 1px solid #00ADB5; }
         h1, h2, h3 { color: #F5F5F7; }
     </style>
-""", unsafe_allowed_html=True)
+""", unsafe_allow_html=True)
 
 st.title("⚡ VisionStudio Creative Cloud")
 st.caption("Aplikasi Produksi Multimedia Foto & Video Berbasis Web")
