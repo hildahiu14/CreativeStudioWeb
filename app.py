@@ -2,9 +2,11 @@ import streamlit as st
 import cv2
 import numpy as np
 import os
-from PIL import Image, ImageDraw, ImageFont
 import pytesseract
-import subprocess
+from PIL import Image, ImageDraw, ImageFont
+
+# Hubungkan Python ke software Tesseract Windows secara absolut
+pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
 
 # Konfigurasi Halaman Utama Web Browser
 st.set_page_config(page_title="VisionStudio Advanced Multimedia", layout="wide")
@@ -253,32 +255,32 @@ if uploaded_file is not None:
                     )
 
     # -------------------------------------------------------------------------
-    # TAB 3: OCR TEXT EXTRACTOR (EKSTRAKSI GAMBAR >> TEKS)
+    # TAB 3: OCR TEXT EXTRACTOR (DETEKSI TEKS ASLI)
     # -------------------------------------------------------------------------
     with tab_ocr:
-        if is_video:
-            st.warning("Fitur OCR Text Extractor dikhususkan untuk memindai dokumen foto statis.")
-        else:
-            st.subheader("🔍 Pindai Teks Otomatis dari Gambar (AI OCR)")
-            col_view3, col_text3 = st.columns([1, 1])
-            
-            with col_view3:
-                st.image(cv2.cvtColor(cv_img, cv2.COLOR_BGR2RGB), caption="Dokumen Asli", use_container_width=True)
-                
-            with col_text3:
-                st.write("### Hasil Ekstraksi Teks:")
-                if st.button("🚀 Jalankan Ekstraksi Deteksi Teks Sekarang"):
-                    with st.spinner("Sedang memproses membaca baris teks dokumen..."):
-                    # Di dalam fungsi ekstraksi teks OCR kamu:
-                        try:
-                            # Cek apakah perintah tesseract tersedia di sistem Linux server
-                            subprocess.run(["tesseract", "--version"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
-                            text_result = pytesseract.image_to_string(pil_img)
-                            st.text_area("Hasil Ekstraksi Teks:", value=text_result, height=300)
-                        except (FileNotFoundError, subprocess.CalledProcessError):
-                            # Jika server cloud bermasalah, gunakan fallback teks tiruan (Mock Text) agar simulasi demo tetap jalan!
-                            st.warning("⚠️ Engine Tesseract sedang inisialisasi di server cloud. Menggunakan Mode Simulasi Demo:")
-                            st.text_area("Hasil Ekstraksi Teks (Simulasi):", value="Halo! Ini adalah teks simulasi ekstraksi OCR.\nFitur OCR berjalan sukses di lingkungan pengujian.", height=300)
+        st.subheader("🚀 Ekstraksi Teks Otomatis dari Gambar (OCR)")
+        
+        if st.button("🔍 Jalankan Ekstraksi Deteksi Teks Sekarang"):
+            if cv_img is not None:
+                with st.spinner("Sedang membaca teks pada gambar..."):
+                    try:
+                        # Konversi OpenCV BGR ke PIL RGB
+                        pil_img_ocr = Image.fromarray(cv2.cvtColor(cv_img, cv2.COLOR_BGR2RGB))
+                        
+                        # Eksekusi ekstraksi teks asli menggunakan Tesseract
+                        teks_hasil = pytesseract.image_to_string(pil_img_ocr, lang='ind+eng')
+                        
+                        if teks_hasil.strip():
+                            st.success("Teks Berhasil Diekstrak!")
+                            # Menampilkan teks asli hasil pembacaan gambar dokumen
+                            st.text_area("Hasil Ekstraksi Teks Asli:", value=teks_hasil, height=300)
+                        else:
+                            st.warning("Gambar berhasil dibaca, namun engine tidak mendeteksi karakter teks yang jelas.")
+                            
+                    except Exception as e:
+                        st.error(f"Gagal mengeksekusi OCR. Periksa kembali instalasi Tesseract di laptopmu. Error: {e}")
+            else:
+                st.error("Silakan unggah file gambar terlebih dahulu di sidebar kiri!")
     # -------------------------------------------------------------------------
     # TAB 4: CRYPTO-STEGANOGRAPHY (PENYISIPAN PESAN RAHASIA)
     # -------------------------------------------------------------------------
