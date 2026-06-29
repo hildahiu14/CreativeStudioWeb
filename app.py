@@ -5,9 +5,16 @@ import os
 import pytesseract
 from PIL import Image, ImageDraw, ImageFont
 
-# Hubungkan Python ke software Tesseract Windows secara absolut
-pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+# 1. Tentukan jalur Tesseract khusus untuk laptop Windows kamu
+windows_tesseract_path = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
 
+# 2. Cek otomatis: Jika file Windows ada (berarti sedang di localhost), pakai path tersebut.
+if os.path.exists(windows_tesseract_path):
+    pytesseract.pytesseract.tesseract_cmd = windows_tesseract_path
+else:
+    # Jika tidak ada (berarti sedang di server cloud Linux), 
+    # biarkan kosongan karena Linux akan mendeteksi Tesseract secara otomatis melalui PATH sistem.
+    pass
 # Konfigurasi Halaman Utama Web Browser
 st.set_page_config(page_title="VisionStudio Advanced Multimedia", layout="wide")
 
@@ -236,9 +243,18 @@ if uploaded_file is not None:
                     # Tempelkan gambar emoji di atas foto utama (mendukung transparansi)
                     pil_img.paste(emoji_img, (pos_x, pos_y), emoji_img)
                 except Exception as e:
-                    # Fallback jika koneksi server gagal, tampilkan teks penanda biasa
+                    # IMPLEMENTASI IMAGEFONT: Fallback jika koneksi internet offline
                     draw = ImageDraw.Draw(pil_img)
-                    draw.text((pos_x, pos_y), "[Sticker]", fill=(255, 255, 255))
+                    
+                    try:
+                        # Mencoba memuat font bawaan sistem Windows (Arial) dengan ukuran dinamis sesuai slider
+                        custom_font = ImageFont.truetype("arial.ttf", size=emo_size)
+                    except IOError:
+                        # Jika di cloud Linux atau font arial tidak ketemu, gunakan font default PIL
+                        custom_font = ImageFont.load_default()
+                        
+                    # Gambar teks cap penanda menggunakan font yang telah dikonfigurasi
+                    draw.text((pos_x, pos_y), f"[{emoticon_select.split()[0]}]", fill=(255, 255, 255), font=custom_font)
                 
                 st.image(pil_img, caption="Hasil Kreasi Custom Overlay & Pigura", use_container_width=True)
                 
